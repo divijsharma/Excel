@@ -1,0 +1,153 @@
+Sub Compare_Click()
+    Dim total_rows As Long
+    Dim row_counter As Long
+    Dim proceed_to_next_check As Boolean
+    Dim match_found As Boolean
+    Dim first_string As String
+    Dim second_string As String
+    
+' 1. Find the total number of rows
+    total_rows = Find_Total_Rows()
+    
+' Loop from first row till the end of rows
+    For row_counter = 1 To total_rows
+        proceed_to_next_check = True
+
+' Remove white spaces from the strings
+        first_string = Application.WorksheetFunction.Trim(Cells(row_counter, 1).Value)
+        second_string = Application.WorksheetFunction.Trim(Cells(row_counter, 2).Value)
+        
+' 2. Look for exact match
+        If first_string = second_string Then
+            Cells(row_counter, 3).Value = "Exact Match"
+            proceed_to_next_check = False
+        End If
+        
+' 3. Look for partial match with same sequence
+        If proceed_to_next_check Then
+            match_found = Partial_Match_Same_Sequence(first_string, second_string)
+            If match_found Then
+                proceed_to_next_check = False
+                Cells(row_counter, 3).Value = "Partial Match Same Sequence"
+            End If
+        End If
+
+' 4. Look for partial match with different sequence. This just means that all the words in smaller string are present in larger string
+' or not
+        If proceed_to_next_check Then
+            match_found = Match_Without_Sequence(first_string, second_string)
+            If match_found Then
+                proceed_to_next_check = False
+                Cells(row_counter, 3).Value = "Match with different sequence"
+            End If
+        End If
+        
+' 5. Check if the match is found so far or not
+' If proceed_to_next_check is True till now then the match is not found in all the 3 above cases
+        If proceed_to_next_check Then
+            Cells(row_counter, 3).Value = "Do not match"
+        End If
+    Next row_counter
+    Cells(1, 1).Select
+End Sub
+
+Public Function Find_Total_Rows() As Long
+    Dim lRow As Long
+    ' Finds the last non-blank row on the sheet
+    On Error Resume Next
+    Find_Total_Rows = Cells.Find(What:="*", _
+                    After:=Range("A1"), _
+                    LookAt:=xlPart, _
+                    LookIn:=xlFormulas, _
+                    SearchOrder:=xlByRows, _
+                    SearchDirection:=xlPrevious, _
+                    MatchCase:=False).Row
+    
+    On Error GoTo 0
+End Function
+
+Public Function Partial_Match_Same_Sequence(inp_string1 As String, inp_string2 As String) As Boolean
+    Dim len_string1 As Long
+    Dim len_string2 As Long
+    Dim smaller_string As String
+    Dim larger_string As String
+    
+    ' Find the length of two strings
+    len_string1 = Len(inp_string1)
+    len_string2 = Len(inp_string2)
+    
+    ' Assign the smaller string to string 1 and larger string to string 2. In case there length is same then control will go to else
+    ' condition and it does not matter which input string goes to which variable
+    If len_string1 < len_string2 Then ' string 1 is smaller
+        smaller_string = inp_string1
+        larger_string = inp_string2
+    Else ' either string 1 is larger or they are equal
+        smaller_string = inp_string2
+        larger_string = inp_string1
+    End If
+     
+    ' Find of smaller string is a part of larger string or not
+    If InStr(larger_string, smaller_string) > 0 Then
+        Partial_Match_Same_Sequence = True
+    Else
+        Partial_Match_Same_Sequence = False
+    End If
+End Function
+
+Public Function Match_Without_Sequence(inp_string1 As String, inp_string2 As String) As Boolean
+    Dim len_string1 As Long
+    Dim len_string2 As Long
+    Dim smaller_string As String
+    Dim larger_string As String
+    Dim large_array() As String
+    Dim small_array() As String
+    Dim len_large_array As Long
+    Dim len_small_array As Long
+    Dim large_count As Long
+    Dim small_count As Long
+    Dim match_found As Boolean
+    
+    ' Find the length of two strings
+    len_string1 = Len(inp_string1)
+    len_string2 = Len(inp_string2)
+    
+    ' Assign the smaller string to string 1 and larger string to string 2. In case there length is same then control will go to else
+    ' condition and it does not matter which input string goes to which variable
+    If len_string1 < len_string2 Then ' string 1 is smaller
+        smaller_string = inp_string1
+        larger_string = inp_string2
+    Else ' either string 1 is larger or they are equal
+        smaller_string = inp_string2
+        larger_string = inp_string1
+    End If
+    
+    ' Convert the string into array of words by splitting on space.
+        small_array = Split(smaller_string, " ")
+        large_array = Split(larger_string, " ")
+        
+    ' Find length of each array
+        len_large_array = UBound(large_array)
+        len_small_array = UBound(small_array)
+        
+    ' Check every element of smaller array with each element of larger array. If even one element is not found then the strings do not
+    ' match
+        For small_count = 0 To len_small_array
+            match_found = False
+            For large_count = 0 To len_large_array
+                If large_array(large_count) = small_array(small_count) Then
+                    match_found = True
+                    large_count = len_large_array + 10
+                End If
+            Next large_count
+            
+            If match_found = False Then ' implies that the word in smaller array was not in larger array implies the strings do not match
+                small_count = len_small_array + 10
+            End If
+        Next small_count
+        
+        If match_found Then
+            Match_Without_Sequence = True
+        Else
+            Match_Without_Sequence = False
+        End If
+End Function
