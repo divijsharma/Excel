@@ -1,0 +1,142 @@
+Public Function IsArrayEmpty(Arr As Variant) As Boolean
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' IsArrayEmpty
+' This function tests whether the array is empty (unallocated). Returns TRUE or FALSE.
+'
+' The VBA IsArray function indicates whether a variable is an array, but it does not
+' distinguish between allocated and unallocated arrays. It will return TRUE for both
+' allocated and unallocated arrays. This function tests whether the array has actually
+' been allocated.
+'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+Dim LB As Long
+Dim UB As Long
+
+Err.Clear
+On Error Resume Next
+If IsArray(Arr) = False Then
+    ' we weren't passed an array, return True
+    IsArrayEmpty = True
+End If
+
+' Attempt to get the UBound of the array. If the array is
+' unallocated, an error will occur.
+UB = UBound(Arr, 1)
+If (Err.Number <> 0) Then
+    IsArrayEmpty = True
+Else
+    ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+    ' On rare occassion, under circumstances I cannot reliably replictate, Err.Number will
+    ' be 0 for an unallocated, empty array. On these occassions, LBound is 0 and UBound is
+    ' -1. To accomodate the weird behavior, test to see if LB > UB. If so, the array is not
+    ' allocated.
+    ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+    Err.Clear
+    LB = LBound(Arr)
+    If LB > UB Then
+        IsArrayEmpty = True
+    Else
+        IsArrayEmpty = False
+    End If
+End If
+
+End Function
+
+Public Function ListFilesFSO(ByVal sPath As String)
+
+    Dim oFSO As FileSystemObject
+    Dim oFolder As Folder
+    Dim oFile As File
+    Dim files() As String
+    Dim size As Integer
+    
+    size = 0
+    Set oFSO = New FileSystemObject
+    Set oFolder = oFSO.GetFolder(sPath)
+    'Debug.Print sPath
+    For Each oFile In oFolder.files
+        'Create array of all xls files in the folder
+        If Right(oFile.Name, 3) = "xls" And InStr(oFile.Name, "Merge") = 0 Then
+            size = size + 1
+            ReDim Preserve files(size)
+            files(size) = oFile.Name
+        End If
+    Next
+    
+    ListFilesFSO = files
+    Set oFile = Nothing
+    Set oFolder = Nothing
+    Set oFSO = Nothing
+
+End Function
+
+Sub Merge_Files()
+    Dim currWorkingDir As String
+    Dim filesArrayLen As Long
+    Dim files() As String
+    Dim newFileName As String
+    Dim newFileExists As String
+    Dim fileCount As Integer
+    Dim strSheetName As String
+    Dim strCopyFileName As String
+    Dim wsCopy As Worksheet
+    Dim wsDest As Worksheet
+    Dim wkbCopy As Workbook
+    Dim wkbDest As Workbook
+    Dim lCopyLastRow As Long
+    Dim lDestLastRow As Long
+    
+        
+    'Find Current Working Directory
+    currWorkingDir = ActiveWorkbook.Path
+        
+    'Find all the files in that directory
+    fileList = ListFilesFSO(currWorkingDir)
+    
+    'To check for whether the array is empty or not I have incorporated modArraySupport module
+    If IsArrayEmpty(fileList) Then
+        MsgBox "No files in directory to merge"
+        Exit Sub
+    End If
+   
+    'Create New Workbook and save it as Merged.xls
+    'Check if file exists or not
+    newFileName = currWorkingDir & "\" & Format(Now, "yyyy-mm-dd hh-mm-ss") & " - Merged.xls"
+    Debug.Print newFileName
+    'Check if the file exists ot not
+    newFileExists = Dir(newFileName)
+    If newFileExists = "" Then
+        'Add new workbook
+        Workbooks.Add
+        ActiveWorkbook.SaveAs Filename:=newFileName
+        ActiveWorkbook.Close
+    End If
+    
+    strSheetName = "Sheet1"
+    Set wkbDest = Workbooks.Open(newFileName)
+    Set wsDest = wkbDest.Worksheets(strSheetName)
+    
+    For fileCount = 1 To UBound(fileList)
+        'Open the current file
+        strCopyFileName = currWorkingDir & "\" & fileList(fileCount)
+        Set wkbCopy = Workbooks.Open(strCopyFileName)
+        Set wsCopy = wkbCopy.Worksheets(strSheetName)
+        
+        'Find the total number of rows
+        lCopyLastRow = wsCopy.Cells(Rows.Count, 1).End(xlUp).Row
+        
+        'Find the first blank row in destination workbook
+        lDestLastRow = wsDest.Cells(wsDest.Rows.Count, "A").End(xlUp).Offset(1).Row
+        
+        'If file1 then copy from first row otherwise from 4th row and paste in new file
+        If fileCount = 1 Then
+            wsCopy.Range("A1:AI" & lCopyLastRow).Copy wsDest.Range("A" & lDestLastRow)
+        Else
+            wsCopy.Range("A4:AI" & lCopyLastRow).Copy wsDest.Range("A" & lDestLastRow)
+        End If
+                
+        'Close the current workbook without saving
+        wkbCopy.Close savechanges:=False
+    Next fileCount
+    wkbDest.Close savechanges:=True
+End Sub
